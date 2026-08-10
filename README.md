@@ -1,13 +1,13 @@
 # Weather Prediction MCP Server + Databricks Agent
 
-An educational weather assistant built for the Databricks AI Bootcamp. It exposes live Open-Meteo data through a FastMCP server and is designed to be registered as an external MCP tool in Databricks Agent Bricks.
+An educational weather assistant built for the Databricks AI Bootcamp. It exposes live Open-Meteo data through a FastMCP server and is designed to be registered as an custom MCP tool in Databricks Agent Bricks.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
     U[User] --> A[Databricks Agent Bricks]
-    A -->|External MCP tool calls| M[Weather FastMCP App]
+    A -->|Custom MCP Server tool calls| M[Weather FastMCP App]
     M --> W[Weather adapter]
     W --> G[Open-Meteo Geocoding API]
     W --> F[Open-Meteo Forecast API]
@@ -45,6 +45,10 @@ mcp_server/
 agent/
   system_prompt.md
   demonstration.md
+frontend/
+  app.py
+  app.yaml
+  requirements.txt
 tests/
 docs/screenshots/
 README.md
@@ -73,10 +77,23 @@ The streamable HTTP MCP endpoint is available at `http://localhost:8000/mcp` by 
 ## Register with Agent Bricks
 
 1. In Databricks, open **Agents** and create a new agent.
-2. Add an **External MCP** tool using `<APP_URL>/mcp`.
+2. Add an **Custom MCP Server** tool using `<APP_URL>/mcp`.
 3. Copy the complete prompt from [`agent/system_prompt.md`](agent/system_prompt.md) into the agent system instructions.
 4. Confirm that all three tools appear: `get_current_weather`, `get_forecast`, and `get_weather_recommendation`.
 5. Run the prompts in [`agent/demonstration.md`](agent/demonstration.md) and capture each visible tool call plus final answer.
+
+## Deploy the frontend as a Databricks App
+
+The project includes a separate Streamlit user interface under `frontend/`. It
+shows live current conditions, a 1–7 day forecast, temperature charts, and
+explainable umbrella, jacket, UV, and wind recommendations.
+
+1. Create a second Databricks **Custom app** named `weather-intelligence-ui`.
+2. Configure the same repository and branch.
+3. Set **Source code path** to `frontend`.
+4. Deploy with no resources or secrets; Open-Meteo does not require an API key.
+5. Open the App and validate Lisbon, Chicago, and Austin.
+6. Capture one screenshot showing the working frontend and resolved location.
 
 ## Error behavior
 
