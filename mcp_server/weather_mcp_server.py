@@ -111,9 +111,10 @@ def get_weather_recommendation(location: str, date: str) -> dict[str, Any]:
     }
 
 
-# Databricks AI Playground requires a stateless Streamable HTTP application.
-# FastMCP exposes this ASGI application at /mcp by default.
-app = mcp.http_app(stateless_http=True)
+# Databricks Apps exposes the custom MCP endpoint externally at /mcp.
+# Mount FastMCP at the ASGI root so the platform proxy does not duplicate the
+# path as /mcp/mcp. Stateless HTTP is required by AI Playground clients.
+app = mcp.http_app(path="/", stateless_http=True)
 
 
 if __name__ == "__main__":
