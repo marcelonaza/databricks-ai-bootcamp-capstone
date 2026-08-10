@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+import uvicorn
 from fastmcp import FastMCP
 
 from weather_adapter import OpenMeteoAdapter, WeatherAdapterError
@@ -110,9 +111,14 @@ def get_weather_recommendation(location: str, date: str) -> dict[str, Any]:
     }
 
 
+# Databricks AI Playground requires a stateless Streamable HTTP application.
+# FastMCP exposes this ASGI application at /mcp by default.
+app = mcp.http_app(stateless_http=True)
+
+
 if __name__ == "__main__":
-    mcp.run(
-        transport="streamable-http",
+    uvicorn.run(
+        app,
         host="0.0.0.0",
         port=int(os.getenv("DATABRICKS_APP_PORT", "8000")),
     )
