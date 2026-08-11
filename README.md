@@ -1,64 +1,78 @@
 # Naza Weather Intelligence
 
-A Databricks AI Bootcamp Day 3 capstone that demonstrates an end-to-end weather intelligence workflow with a custom MCP server, a Databricks weather agent, and a separate Streamlit dashboard.
+> Databricks AI Bootcamp — Day 3: Agent Bricks and End-to-End AI Applications
 
-The project turns live Open-Meteo data into three agent-ready tools for current conditions, multi-day forecasts, and explainable weather recommendations.
+Naza Weather Intelligence is an AI weather application built on Databricks. It combines a Databricks Weather Agent, live context from Open-Meteo, a custom Model Context Protocol (MCP) server, scenario-based evaluation, and a Streamlit Databricks App.
 
-## Project status
+The solution demonstrates the complete Day 3 workflow: an agent selects a tool, the MCP server retrieves and normalizes external context, the agent produces a grounded response, and documented evaluation scenarios verify the behavior.
 
-The stable project consists of two independently deployed Databricks Apps:
+## Day 3 requirements
 
-- **`mcp-weather-server`** — a FastMCP server registered with a Databricks agent and validated in AI Playground.
-- **`weather-intelligence-ui`** — a Streamlit dashboard that queries Open-Meteo directly and presents live weather, forecasts, charts, and deterministic recommendations.
+| Bootcamp objective | Project implementation | Evidence |
+|---|---|---|
+| Build an AI agent | Weather Agent configured in Databricks AI Playground / Agent Bricks | System prompt and validation scenarios in `agent/` |
+| Add contextual data | Live weather context retrieved from Open-Meteo | `OpenMeteoAdapter` |
+| Use agent tools | Three weather tools exposed through a custom FastMCP server | `mcp_server/weather_mcp_server.py` |
+| Evaluate the application | Four repeatable scenarios test tool selection, grounding, recommendations, and error handling | `agent/demonstration.md` |
+| Deploy an end-user application | Streamlit weather dashboard deployed with Databricks Apps | `frontend/` |
 
-The Streamlit dashboard complements the agent demonstration; it is not a chat frontend for the agent. An experimental exported agent app was intentionally excluded from this stable version.
-
-## Architecture
+## Solution architecture
 
 ```mermaid
 flowchart TD
-    U1["AI Playground user"] --> AG["Databricks Weather Agent"]
-    AG --> MCP["Custom FastMCP App"]
-    MCP --> AD["Weather adapter"]
-    AD --> OM["Open-Meteo APIs"]
+    USER["User"] --> AGENT["Databricks Weather Agent"]
+    AGENT --> MCP["Custom FastMCP Server"]
+    MCP --> ADAPTER["Open-Meteo Adapter"]
+    ADAPTER --> API["Open-Meteo APIs"]
+    API --> ADAPTER
+    ADAPTER --> MCP
+    MCP --> AGENT
 
-    U2["Dashboard user"] --> UI["Streamlit Databricks App"]
-    UI --> OM
+    USER --> UI["Streamlit Databricks App"]
+    UI --> API
 ```
 
-This separation keeps the submitted implementation accurate:
+The project has two user experiences:
 
-- The **agent path** demonstrates model tool selection, MCP tool calls, grounded weather answers, and tool-failure guardrails.
-- The **dashboard path** demonstrates a polished end-user interface for live weather analysis.
-- Both paths use Open-Meteo, but only the agent path calls the custom MCP server.
+1. **Weather Agent:** uses the custom MCP server to answer natural-language questions with live weather context.
+2. **Weather Intelligence UI:** presents current conditions, forecasts, charts, and explainable recommendations in a visual Databricks App.
 
-## Day 3 capabilities
+Both experiences use the same external data source and the same recommendation thresholds. The dashboard is an independent visual application; agent validation is performed in Databricks AI Playground.
 
-| Capability | Implementation |
+## Main components
+
+### Weather Agent
+
+The Weather Agent is configured in Databricks AI Playground / Agent Bricks with the instructions in [`agent/system_prompt.md`](agent/system_prompt.md). The prompt requires tool use for weather facts, preserves returned units, prevents fabricated live data, handles tool errors, and includes severe-weather guardrails.
+
+### Custom MCP server
+
+The FastMCP backend is deployed as the Databricks App `mcp-weather-server` and exposes a streamable HTTP endpoint at `https://<databricks-app-url>/mcp`.
+
+| MCP tool | Description |
 |---|---|
-| Custom MCP server | FastMCP over streamable HTTP |
-| Agent tools | Current weather, forecast, and recommendation tools |
-| External data | Open-Meteo Geocoding and Forecast APIs |
-| Agent grounding | System prompt requires tool-derived weather facts |
-| Explainability | Recommendation thresholds and triggered rules are returned |
-| Error handling | Invalid places, dates, ranges, timeouts, and malformed responses |
-| User experience | Separate Streamlit dashboard deployed as a Databricks App |
-| Validation | Automated adapter tests and manual AI Playground scenarios |
+| `get_current_weather(location)` | Returns normalized current temperature, apparent temperature, humidity, precipitation, wind, conditions, and observation time. |
+| `get_forecast(location, days)` | Returns a normalized 1–16 day forecast with temperature, precipitation, wind, UV index, and conditions. |
+| `get_weather_recommendation(location, date)` | Returns forecast-backed advice together with the exact rules that were triggered. |
 
-## MCP tools
+### Context layer
 
-| Tool | Purpose |
+`mcp_server/weather_adapter.py` connects the MCP tools to Open-Meteo. It resolves locations, retrieves current and forecast data, converts WMO codes, normalizes fields and units, validates dates and ranges, and converts external failures into safe domain errors.
+
+### Explainable recommendations
+
+| Condition | Recommendation |
 |---|---|
-| `get_current_weather(location)` | Returns temperature, apparent temperature, humidity, precipitation, wind, conditions, and observation time. |
-| `get_forecast(location, days)` | Returns a normalized 1–16 day forecast with temperature, precipitation, wind, UV, and conditions. |
-| `get_weather_recommendation(location, date)` | Returns forecast-backed advice and the rules that triggered it for an ISO date. |
+| Precipitation probability ≥ 40% | Bring an umbrella or waterproof layer |
+| Minimum temperature < 12 °C | Bring a jacket |
+| UV index ≥ 6 | Use sunscreen, sunglasses, and seek shade |
+| Maximum wind speed ≥ 40 km/h | Use caution with exposed outdoor activities |
 
-Recommendations are deterministic:
+The MCP response includes both the recommendation and `triggered_rules`, making the result explainable and testable.
 
-- umbrella or waterproof layer when precipitation probability is at least 40%;
-- jacket when minimum temperature is below 12 °C;
-- sun protection when UV index is at least 6;
-- wind caution when maximum wind is at least 40 km/h.
+### Weather Intelligence UI
+
+The Streamlit Databricks App `weather-intelligence-ui` provides location search, live current conditions, configurable 1–7 day forecasts, tables, temperature charts, date-specific recommendations, safe error messages, and 15-minute caching.
 
 ## Repository structure
 
@@ -87,123 +101,106 @@ Recommendations are deterministic:
 ## Technology stack
 
 - Databricks Apps
-- Databricks AI Playground / Agent workflow
-- FastMCP
-- Streamlit
-- Python
-- Open-Meteo
-- pandas
-- pytest
+- Databricks AI Playground / Agent Bricks
+- Model Context Protocol (MCP) and FastMCP
+- Streamlit and pandas
+- Python and pytest
+- Open-Meteo Geocoding and Forecast APIs
 
-## Local setup
+## Run locally
 
-Use Python 3.11 or later.
+Python 3.11 or later is recommended.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r mcp_server/requirements.txt
+pip install -r frontend/requirements.txt
 pip install pytest
 pytest -q
 ```
 
-Run the MCP server locally:
+Start the MCP server:
 
 ```bash
-python mcp_server/weather_mcp_server.py
+cd mcp_server
+python weather_mcp_server.py
 ```
 
-The streamable HTTP endpoint is available at `http://localhost:8000/mcp`.
+The local MCP endpoint is available at `http://localhost:8000/mcp`.
 
-Run the dashboard locally:
+Start the dashboard from the repository root:
 
 ```bash
-pip install -r frontend/requirements.txt
 streamlit run frontend/app.py
 ```
 
-## Deploy the MCP server
+## Deploy on Databricks
 
-1. Create or update a Databricks Git Folder from this repository and branch.
-2. Create a Databricks App using `mcp_server` as the source directory.
-3. Deploy the App. The included `app.yaml` starts the MCP server on the Databricks App port.
-4. Verify successful startup in the App logs.
-5. Use `<APP_URL>/mcp` as the custom MCP endpoint.
+### MCP server
 
-FastMCP is mounted at the ASGI root so the Databricks proxy exposes the expected external `/mcp` route without creating `/mcp/mcp`.
+1. Add this repository and the `agent/weather-mcp-capstone` branch to a Databricks Git Folder.
+2. Create a Databricks App named `mcp-weather-server` using `mcp_server` as its source directory.
+3. Deploy the App and confirm that its status is **Running**.
+4. Register `https://<app-url>/mcp` as a Custom MCP Server in Databricks AI Playground.
+5. Confirm that all three tools are discovered.
 
-## Configure the Weather Agent
+### Weather Agent
 
-1. Create a Databricks agent in AI Playground.
-2. Add the deployed `<APP_URL>/mcp` endpoint as a **Custom MCP Server**.
-3. Copy [`agent/system_prompt.md`](agent/system_prompt.md) into the system instructions.
-4. Confirm that all three MCP tools are discovered.
-5. Run the scenarios in [`agent/demonstration.md`](agent/demonstration.md).
+1. Create or open the Weather Agent in Databricks AI Playground / Agent Bricks.
+2. Attach the deployed custom MCP server.
+3. Copy the instructions from [`agent/system_prompt.md`](agent/system_prompt.md).
+4. Use a tool-capable model.
+5. Run the evaluation scenarios in [`agent/demonstration.md`](agent/demonstration.md).
 
-The prompt prevents the agent from inventing live weather values, requires a tool call for weather facts, preserves returned units, and instructs the agent to surface tool errors instead of guessing.
+### Streamlit application
 
-## Deploy the dashboard
+1. Create a Databricks App named `weather-intelligence-ui` using `frontend` as its source directory.
+2. Deploy the App.
+3. Test multiple cities and forecast lengths.
 
-1. Create a second Databricks App named `weather-intelligence-ui`.
-2. Use `frontend` as the source directory.
-3. Deploy without weather API credentials; Open-Meteo does not require an API key for this educational use.
-4. Validate multiple locations and forecast lengths.
+Open-Meteo does not require an API key for this educational project.
 
-The dashboard includes:
+## Evaluation
 
-- location resolution;
-- live current conditions;
-- 1–7 day forecasts;
-- temperature charts;
-- rule-based recommendations;
-- user-safe error messages;
-- 15-minute data caching.
+The project uses repeatable behavioral evaluation scenarios:
 
-## Validation
+| Test | Expected behavior |
+|---|---|
+| Current weather in Lisbon | Calls `get_current_weather` and returns grounded current values |
+| Three-day rain outlook for Chicago | Calls `get_forecast(days=3)` and summarizes only returned data |
+| Umbrella or jacket advice for Austin | Calls `get_weather_recommendation` and explains triggered rules |
+| Invalid location | Returns a clean error and does not fabricate weather values |
 
-Automated tests cover:
-
-- normalization of current weather data;
-- unknown-location handling;
-- API timeout handling;
-- forecast-range validation before an HTTP request.
-
-Run them with:
+Automated unit tests validate current-weather normalization, unknown-location handling, external API timeout handling, and forecast-range validation before any HTTP request.
 
 ```bash
 pytest -q
 ```
 
-Manual agent scenarios validate correct tool selection:
+## Reliability and safety
 
-| Scenario | Expected tool |
-|---|---|
-| Current weather in Lisbon | `get_current_weather` |
-| Three-day rain outlook for Chicago | `get_forecast(days=3)` |
-| Umbrella or jacket advice for Austin | `get_weather_recommendation` |
-| Invalid or ambiguous location | Clean tool error and no invented weather data |
-
-## Security and reliability
-
-- No weather API key is required or committed.
-- `.env` files are ignored.
-- HTTP requests use a 15-second timeout.
-- External failures are converted into user-safe errors.
-- Forecast dates and ranges are validated before processing.
-- Weather facts remain grounded in tool output.
-- Severe-weather answers direct users to official local authorities.
-
-## Known limitations
-
-- The Streamlit dashboard calls Open-Meteo directly; it does not invoke the Databricks agent.
-- Agent evaluation is currently manual through the documented demonstration scenarios.
+- No API keys or secrets are committed.
+- External HTTP requests use a 15-second timeout.
+- Tool responses use a consistent `ok/data/error` contract.
+- Invalid locations, dates, and forecast ranges are handled safely.
+- Live weather facts must come from MCP tool output.
+- Recommendations expose the rules that produced them.
 - The project does not provide emergency alerts or life-safety guarantees.
-- Open-Meteo terms and usage limits should be reviewed before commercial use.
 
-## Portfolio outcome
+## Evidence captured
 
-This project demonstrates practical AI Data Engineering skills across API ingestion, response normalization, agent tool design, MCP integration, deterministic business rules, Databricks App deployment, testing, and user-facing data products.
+- `mcp-weather-server` deployed and running
+- Three MCP tools available to the Weather Agent
+- Successful AI Playground tool calls
+- `weather-intelligence-ui` deployed with live weather data
+- Forecast, chart, and recommendation screens
+- Automated adapter tests
+
+## Project outcome
+
+This Day 3 project demonstrates an end-to-end AI application on Databricks, combining agents, live contextual data, MCP tools, deterministic evaluation criteria, external API integration, deployment, testing, and a user-facing data product.
 
 ## Disclaimer
 
-Forecasts can change. This educational project is not an emergency warning system. Consult official local weather and emergency authorities for dangerous conditions.
+Weather forecasts can change. This educational application is not an emergency warning system. For dangerous conditions, consult official local weather and emergency authorities.
