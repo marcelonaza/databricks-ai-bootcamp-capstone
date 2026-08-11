@@ -1,14 +1,68 @@
-# Agent demonstration checklist
+# Weather Agent validation scenarios
 
-Capture the visible tool call and final answer for each prompt after registering the deployed MCP server in Agent Bricks.
+Use these scenarios after registering the deployed Weather MCP server in Databricks AI Playground. For each successful scenario, confirm both the visible tool call and the final grounded answer.
 
-1. `What is the current weather in Lisbon, Portugal?`
-   - Expected tool: `get_current_weather`
-2. `Will it rain in Chicago over the next three days?`
-   - Expected tool: `get_forecast` with `days=3`
-3. `Should I bring an umbrella or jacket to Austin tomorrow?`
-   - Expected tool: `get_weather_recommendation` with tomorrow as `YYYY-MM-DD`
-4. Error-handling evidence: `What is the weather in X?`
-   - Expected behavior: clean error and request for a clearer location; no invented data.
+## 1. Current conditions
 
-Store screenshots in `docs/screenshots/` and replace this checklist with the actual observed outputs before final submission.
+**Prompt**
+
+```text
+What is the current weather in Lisbon, Portugal?
+```
+
+**Expected behavior**
+
+- Calls `get_current_weather`.
+- Uses the resolved location returned by the tool.
+- Reports current values with the returned units.
+- Identifies Open-Meteo as the data source.
+
+## 2. Multi-day forecast
+
+**Prompt**
+
+```text
+Will it rain in Chicago over the next three days?
+```
+
+**Expected behavior**
+
+- Calls `get_forecast` with `days=3`.
+- Bases the rain summary only on the returned forecast.
+- States that forecasts can change.
+
+## 3. Practical recommendation
+
+**Prompt**
+
+```text
+Should I bring an umbrella or jacket to Austin tomorrow?
+```
+
+**Expected behavior**
+
+- Converts “tomorrow” to an ISO date.
+- Calls `get_weather_recommendation`.
+- Explains the recommendation using returned forecast values and triggered rules.
+
+## 4. Error handling
+
+**Prompt**
+
+```text
+What is the weather in X?
+```
+
+**Expected behavior**
+
+- Surfaces the clean location error.
+- Requests a clearer city, country, or region.
+- Does not invent weather data.
+
+## Evidence checklist
+
+- MCP App deployment is running.
+- All three tools are visible in AI Playground.
+- Each successful prompt shows the expected tool call.
+- Final answers remain grounded in tool output.
+- The invalid-location prompt produces no fabricated values.
