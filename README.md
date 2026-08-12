@@ -1,178 +1,206 @@
-# Databricks AI Capstone Ideas
+# Naza Weather Intelligence
 
-A set of capstone project options that combine **Databricks Apps**, **Lakebase**, unstructured-data retrieval (vector search / RAG), and AI agents. All ideas share the same architectural skeleton — relational tables in Lakebase, embeddings over unstructured text for semantic retrieval, and an agent with tools that can both *read* and *write* to the database.
+> Databricks AI Bootcamp — Day 3: Agent Bricks and End-to-End AI Applications
 
----
+Naza Weather Intelligence is an AI weather application built on Databricks. It combines a Databricks Weather Agent, live context from Open-Meteo, a custom Model Context Protocol (MCP) server, scenario-based evaluation, and a Streamlit Databricks App.
 
-## Capstone Requirements
+The solution demonstrates the complete Day 3 workflow: an agent selects a tool, the MCP server retrieves and normalizes external context, the agent produces a grounded response, and documented evaluation scenarios verify the behavior.
 
-Every project on this list, regardless of which one you choose, must include:
+## Day 3 requirements
 
-- **A data pipeline in Spark.**
-- **Integration with at least one third-party API** (see each project's suggested APIs below).
-- **Processing of unstructured data** of some kind (video, audio, images, text, etc.) — e.g. embedding plot summaries, articles, job descriptions, or news text for semantic retrieval.
-- **A Databricks App with a frontend.**
-- **An AI agent that does stuff** — i.e. an agent with tools that can search/retrieve and also take real actions (writes) against your data.
+| Bootcamp objective | Project implementation | Evidence |
+|---|---|---|
+| Build an AI agent | Weather Agent configured in Databricks AI Playground / Agent Bricks | System prompt and validation scenarios in `agent/` |
+| Add contextual data | Live weather context retrieved from Open-Meteo | `OpenMeteoAdapter` |
+| Use agent tools | Three weather tools exposed through a custom FastMCP server | `mcp_server/weather_mcp_server.py` |
+| Evaluate the application | Four repeatable scenarios test tool selection, grounding, recommendations, and error handling | `agent/demonstration.md` |
+| Deploy an end-user application | Streamlit weather dashboard deployed with Databricks Apps | `frontend/` |
 
-If you have joined the "Rise of the AI Data Engineer" boot camp, then you can submit the capstone project [here](https://learn.dataexpert.io/assignment/4904)
-If you have not joined yet, you can join for free [here](https://learn.dataexpert.io/program/the-one-week-beginners-databricks-boot-camp-7129)
+## Solution architecture
 
----
+```mermaid
+flowchart TD
+    USER["User"] --> AGENT["Databricks Weather Agent"]
+    AGENT --> MCP["Custom FastMCP Server"]
+    MCP --> ADAPTER["Open-Meteo Adapter"]
+    ADAPTER --> API["Open-Meteo APIs"]
+    API --> ADAPTER
+    ADAPTER --> MCP
+    MCP --> AGENT
 
-## 1. AI Movie Night Planner
+    USER --> UI["Streamlit Databricks App"]
+    UI --> API
+```
 
-Users create a group, rate movies, describe what they want to watch, and ask an agent to recommend something everyone will enjoy.
+The project has two user experiences:
 
-**Third-party API**
-- [TMDB API](https://www.themoviedb.org/documentation/api) — movies, actors, genres, posters, plot summaries, reviews, trailers, and streaming-provider availability.
-- Free for noncommercial educational use with attribution; each student needs a free API key.
+1. **Weather Agent:** uses the custom MCP server to answer natural-language questions with live weather context.
+2. **Weather Intelligence UI:** presents current conditions, forecasts, charts, and explainable recommendations in a visual Databricks App.
 
-**Lakebase tables**
-- `users`
-- `groups`
-- `group_members`
-- `movies`
-- `ratings`
-- `watchlist_items`
-- `recommendations`
+Both experiences use the same external data source and the same recommendation thresholds. The dashboard is an independent visual application; agent validation is performed in Databricks AI Playground.
 
-**Context engineering**
-- Embed plot summaries, keywords, cast information, and reviews.
-- Retrieve movies using semantic requests such as *"a funny sci-fi movie that isn't too violent and is under two hours."*
+## Main components
 
-**Agent capabilities**
-- Search and explain recommendations.
-- Compare several movies.
-- Add a movie to the group watchlist.
-- Record ratings after the group watches it.
-- Avoid movies already watched or disliked by group members.
+### Weather Agent
 
----
+The Weather Agent is configured in Databricks AI Playground / Agent Bricks with the instructions in [`agent/system_prompt.md`](agent/system_prompt.md). The prompt requires tool use for weather facts, preserves returned units, prevents fabricated live data, handles tool errors, and includes severe-weather guardrails.
 
-## 2. AI Trip and Outdoor Activity Planner
+### Custom MCP server
 
-Users save destinations and preferences, then ask an agent to build a weather-aware itinerary.
+The FastMCP backend is deployed as the Databricks App `mcp-weather-server` and exposes a streamable HTTP endpoint at `https://<databricks-app-url>/mcp`.
 
-**Third-party APIs**
-- [Open-Meteo Geocoding API](https://open-meteo.com/en/docs/geocoding-api) — destination names → coordinates.
-- [Open-Meteo Weather API](https://open-meteo.com/en/docs) — hourly forecasts.
-- [Open-Meteo Air Quality API](https://open-meteo.com/en/docs/air-quality-api) — AQI, particulate matter, UV, pollen.
-- [Wikimedia APIs](https://www.mediawiki.org/wiki/API:Main_page) — destination descriptions and nearby attractions.
+| MCP tool | Description |
+|---|---|
+| `get_current_weather(location)` | Returns normalized current temperature, apparent temperature, humidity, precipitation, wind, conditions, and observation time. |
+| `get_forecast(location, days)` | Returns a normalized 1–16 day forecast with temperature, precipitation, wind, UV index, and conditions. |
+| `get_weather_recommendation(location, date)` | Returns forecast-backed advice together with the exact rules that were triggered. |
 
-Open-Meteo requires no API key for noncommercial usage under its free limits.
+### Context layer
 
-**Lakebase tables**
-- `users`
-- `trips`
-- `destinations`
-- `activities`
-- `itinerary_items`
-- `weather_snapshots`
-- `packing_items`
+`mcp_server/weather_adapter.py` connects the MCP tools to Open-Meteo. It resolves locations, retrieves current and forecast data, converts WMO codes, normalizes fields and units, validates dates and ranges, and converts external failures into safe domain errors.
 
-**Context engineering**
-- Embed destination descriptions, attraction information, activity requirements, and user notes.
-- Retrieve suitable activities based on interests and current conditions.
+### Explainable recommendations
 
-**Agent capabilities**
-- Generate a day-by-day itinerary.
-- Reschedule outdoor activities when rain or poor air quality is forecast.
-- Build a packing list.
-- Add, remove, or move itinerary items.
-- Explain why it made each weather-based change.
+| Condition | Recommendation |
+|---|---|
+| Precipitation probability ≥ 40% | Bring an umbrella or waterproof layer |
+| Minimum temperature < 12 °C | Bring a jacket |
+| UV index ≥ 6 | Use sunscreen, sunglasses, and seek shade |
+| Maximum wind speed ≥ 40 km/h | Use caution with exposed outdoor activities |
 
----
+The MCP response includes both the recommendation and `triggered_rules`, making the result explainable and testable.
 
-## 3. AI Research and Learning Copilot
+### Weather Intelligence UI
 
-Users create a learning objective, discover relevant papers, save them into collections, and ask an agent to construct a personalized study plan.
+The Streamlit Databricks App `weather-intelligence-ui` provides location search, live current conditions, configurable 1–7 day forecasts, tables, temperature charts, date-specific recommendations, safe error messages, and 15-minute caching.
 
-**Third-party API**
-- [OpenAlex API](https://docs.openalex.org/how-to-use-the-api/authentication) — papers, authors, institutions, topics, citations, abstracts, and open-access content. A free OpenAlex key currently provides a daily free allowance sufficient for normal student projects.
+## Repository structure
 
-**Lakebase tables**
-- `users`
-- `learning_goals`
-- `papers`
-- `authors`
-- `paper_authors`
-- `collections`
-- `collection_papers`
-- `reading_progress`
-- `notes`
+```text
+.
+├── agent/
+│   ├── demonstration.md
+│   └── system_prompt.md
+├── frontend/
+│   ├── app.py
+│   ├── app.yaml
+│   └── requirements.txt
+├── mcp_server/
+│   ├── app.yaml
+│   ├── requirements.txt
+│   ├── weather_adapter.py
+│   └── weather_mcp_server.py
+├── tests/
+│   └── test_weather_adapter.py
+├── docs/
+│   └── screenshots/
+├── .gitignore
+└── README.md
+```
 
-**Context engineering**
-- Embed abstracts, paper content where available, student notes, and learning goals.
-- Retrieve evidence across multiple papers instead of sending the entire collection to the model.
+## Technology stack
 
-**Agent capabilities**
-- Find papers matching a learning goal.
-- Summarize and compare research.
-- Generate a sequenced reading plan.
-- Add papers to a collection.
-- Track progress and recommend the next paper.
-- Include citations in its answers.
+- Databricks Apps
+- Databricks AI Playground / Agent Bricks
+- Model Context Protocol (MCP) and FastMCP
+- Streamlit and pandas
+- Python and pytest
+- Open-Meteo Geocoding and Forecast APIs
 
----
+## Run locally
 
-## 4. AI Stock Market Research Assistant
+Python 3.11 or later is recommended.
 
-Users track a personal watchlist of tickers, describe an investing thesis or question, and ask an agent to pull real market data, summarize company fundamentals and news, and log the analysis.
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r mcp_server/requirements.txt
+pip install -r frontend/requirements.txt
+pip install pytest
+pytest -q
+```
 
-**Third-party API**
-- [Massive Stocks API](https://massive.com/docs/rest/stocks/overview) — real-time and historical tick data, trades, quotes, and fundamentals across all major US exchanges via REST or WebSockets, in standardized JSON/CSV. Instant free-tier access; see the [REST API Quickstart](https://massive.com/docs/rest/quickstart).
+Start the MCP server:
 
-**Lakebase tables**
-- `users`
-- `watchlists`
-- `watchlist_tickers`
-- `companies`
-- `price_snapshots`
-- `news_articles`
-- `research_notes`
-- `analysis_reports`
+```bash
+cd mcp_server
+python weather_mcp_server.py
+```
 
-**Context engineering**
-- Embed company profiles, filings excerpts, earnings-call summaries, and news article text.
-- Retrieve relevant context using semantic requests such as *"companies exposed to rising interest rates in the regional banking sector"* rather than plain ticker/keyword lookup.
+The local MCP endpoint is available at `http://localhost:8000/mcp`.
 
-**Agent capabilities**
-- Pull current and historical price data for a ticker and summarize recent performance.
-- Surface and summarize relevant news/filings for a company.
-- Compare multiple tickers on fundamentals or recent price action.
-- Add or remove tickers from a user's watchlist.
-- Save a research note or generated analysis report tied to a ticker.
-- Flag notable price moves or news since the user's last visit.
+Start the dashboard from the repository root:
 
----
+```bash
+streamlit run frontend/app.py
+```
 
-## 5. AI Job Hunting Copilot
+## Deploy on Databricks
 
-Users describe their skills, target roles, and preferences, then ask an agent to find matching openings, tailor application materials, and track their pipeline.
+### MCP server
 
-**Third-party APIs**
-- [Adzuna API](https://developer.adzuna.com/) — search millions of live job listings across many countries by keyword, location, category, and salary; free tier with a free API key.
-- [USAJobs Search API](https://developer.usajobs.gov/api-reference/get-api-search) — official U.S. federal government job openings; free, requires a free API key and registered email.
-- [RemoteOK API](https://remoteok.com/api) — remote job listings in JSON; free, no API key required.
+1. Add this repository and the `agent/weather-mcp-capstone` branch to a Databricks Git Folder.
+2. Create a Databricks App named `mcp-weather-server` using `mcp_server` as its source directory.
+3. Deploy the App and confirm that its status is **Running**.
+4. Register `https://<app-url>/mcp` as a Custom MCP Server in Databricks AI Playground.
+5. Confirm that all three tools are discovered.
 
-**Lakebase tables**
-- `users`
-- `profiles`
-- `skills`
-- `job_postings`
-- `applications`
-- `saved_jobs`
-- `interview_notes`
-- `contacts`
+### Weather Agent
 
-**Context engineering**
-- Embed job descriptions, required qualifications, and the user's resume/skills profile.
-- Retrieve postings using semantic requests such as *"remote backend roles that don't require 5+ years of Kubernetes experience."*
+1. Create or open the Weather Agent in Databricks AI Playground / Agent Bricks.
+2. Attach the deployed custom MCP server.
+3. Copy the instructions from [`agent/system_prompt.md`](agent/system_prompt.md).
+4. Use a tool-capable model.
+5. Run the evaluation scenarios in [`agent/demonstration.md`](agent/demonstration.md).
 
-**Agent capabilities**
-- Search and rank job postings against a user's profile and stated preferences.
-- Explain why a posting is or isn't a good match.
-- Save a posting to a pipeline stage (saved, applied, interviewing, rejected, offer).
-- Draft a tailored cover-letter snippet or resume bullet for a specific posting.
-- Track interview notes and follow-up dates for saved applications.
-- Surface stale applications that haven't been updated in a while.
+### Streamlit application
+
+1. Create a Databricks App named `weather-intelligence-ui` using `frontend` as its source directory.
+2. Deploy the App.
+3. Test multiple cities and forecast lengths.
+
+Open-Meteo does not require an API key for this educational project.
+
+## Evaluation
+
+The project uses repeatable behavioral evaluation scenarios:
+
+| Test | Expected behavior |
+|---|---|
+| Current weather in Lisbon | Calls `get_current_weather` and returns grounded current values |
+| Three-day rain outlook for Chicago | Calls `get_forecast(days=3)` and summarizes only returned data |
+| Umbrella or jacket advice for Austin | Calls `get_weather_recommendation` and explains triggered rules |
+| Invalid location | Returns a clean error and does not fabricate weather values |
+
+Automated unit tests validate current-weather normalization, unknown-location handling, external API timeout handling, and forecast-range validation before any HTTP request.
+
+```bash
+pytest -q
+```
+
+## Reliability and safety
+
+- No API keys or secrets are committed.
+- External HTTP requests use a 15-second timeout.
+- Tool responses use a consistent `ok/data/error` contract.
+- Invalid locations, dates, and forecast ranges are handled safely.
+- Live weather facts must come from MCP tool output.
+- Recommendations expose the rules that produced them.
+- The project does not provide emergency alerts or life-safety guarantees.
+
+## Evidence captured
+
+- `mcp-weather-server` deployed and running
+- Three MCP tools available to the Weather Agent
+- Successful AI Playground tool calls
+- `weather-intelligence-ui` deployed with live weather data
+- Forecast, chart, and recommendation screens
+- Automated adapter tests
+
+## Project outcome
+
+This Day 3 project demonstrates an end-to-end AI application on Databricks, combining agents, live contextual data, MCP tools, deterministic evaluation criteria, external API integration, deployment, testing, and a user-facing data product.
+
+## Disclaimer
+
+Weather forecasts can change. This educational application is not an emergency warning system. For dangerous conditions, consult official local weather and emergency authorities.
